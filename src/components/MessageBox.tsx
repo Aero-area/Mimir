@@ -218,6 +218,7 @@ const MessageBox = ({
                 )}
 
                 {isLast &&
+                  false &&
                   section.suggestions &&
                   section.suggestions.length > 0 &&
                   hasContent &&
@@ -270,16 +271,7 @@ const MessageBox = ({
 
         {hasContent && (
           <div className="lg:sticky lg:top-20 flex flex-col items-center space-y-3 w-full lg:w-3/12 z-30 h-full pb-4">
-            <SearchImages
-              query={section.message.query}
-              chatHistory={chatHistory}
-              messageId={section.message.messageId}
-            />
-            <SearchVideos
-              chatHistory={chatHistory}
-              query={section.message.query}
-              messageId={section.message.messageId}
-            />
+            {/* SearchImages and SearchVideos are hidden in Mimir v1 */}
           </div>
         )}
       </div>

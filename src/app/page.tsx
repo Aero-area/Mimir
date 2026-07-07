@@ -1,13 +1,5 @@
-import ChatWindow from '@/components/ChatWindow';
-import { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 
-export const metadata: Metadata = {
-  title: 'Chat - Vane',
-  description: 'Chat with the internet, chat with Vane.',
-};
-
-const Home = () => {
-  return <ChatWindow />;
-};
-
-export default Home;
+export default function Home() {
+  redirect('/projects');
+}

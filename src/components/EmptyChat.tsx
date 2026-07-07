@@ -53,7 +53,7 @@ const EmptyChat = () => {
           </h2>
           <EmptyChatMessageInput />
         </div>
-        {(showWeather || showNews) && (
+        {false && (showWeather || showNews) && (
           <div className="flex flex-col w-full gap-4 mt-2 sm:flex-row sm:justify-center">
             {showWeather && (
               <div className="flex-1 w-full">

@@ -48,7 +48,7 @@ const SetupWizard = ({
               >
                 Welcome to
                 <span className="text-[#24A0ED] italic font-['PP_Editorial']">
-                  Vane
+                  Mimir
                 </span>
               </motion.h2>
               <motion.p
@@ -57,7 +57,7 @@ const SetupWizard = ({
                 animate={{ opacity: 1 }}
                 className="text-black/70 dark:text-white/70 text-sm md:text-lg xl:text-2xl mt-2"
               >
-                <span className="font-light">Web search,</span>{' '}
+                <span className="font-light">Research and evidence,</span>{' '}
                 <span className="font-light font-['PP_Editorial'] italic">
                   reimagined
                 </span>
@@ -93,7 +93,7 @@ const SetupWizard = ({
                 >
                   Let us get
                   <span className="text-[#24A0ED] italic font-['PP_Editorial']">
-                    Vane
+                    Mimir
                   </span>{' '}
                   set up for you
                 </motion.p>

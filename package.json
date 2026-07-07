@@ -1,5 +1,5 @@
 {
-  "name": "vane",
+  "name": "mimir",
   "version": "1.12.2",
   "license": "MIT",
   "author": "ItzCrazyKns",
@@ -8,7 +8,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
-    "format:write": "prettier . --write"
+    "format:write": "prettier . --write",
+    "test:scenario": "tsx scripts/test-release-scenario.ts"
   },
   "dependencies": {
     "@google/genai": "^1.34.0",

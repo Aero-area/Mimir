@@ -1,0 +1,21 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "../dist",
+    "strict": false,
+    "paths": {
+      "@/*": ["../src/*"],
+      "pdf-parse/worker": ["../node_modules/pdf-parse/dist/worker/esm/index.d.ts"]
+    }
+  },
+  "include": [
+    "../next-env.d.ts",
+    "../src/**/*.ts",
+    "../src/**/*.tsx",
+    "./test-release-scenario.ts"
+  ],
+  "exclude": ["../node_modules"]
+}

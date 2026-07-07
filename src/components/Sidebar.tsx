@@ -33,28 +33,22 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
 
   const navLinks = [
     {
-      icon: Home,
-      href: '/',
-      active: segments.length === 0 || segments.includes('c'),
-      label: 'Home',
+      icon: Briefcase,
+      href: '/projects',
+      active: segments.includes('projects'),
+      label: 'Projekter',
     },
     {
-      icon: Search,
-      href: '/discover',
-      active: segments.includes('discover'),
-      label: 'Discover',
+      icon: Home,
+      href: '/chat',
+      active: segments.includes('chat') || segments.includes('c') || (segments.length === 0 && !segments.includes('projects')),
+      label: 'Chat',
     },
     {
       icon: BookOpenText,
       href: '/library',
       active: segments.includes('library'),
-      label: 'Library',
-    },
-    {
-      icon: Briefcase,
-      href: '/projects',
-      active: segments.includes('projects'),
-      label: 'Projects',
+      label: 'Bibliotek',
     },
   ];
 
@@ -64,7 +58,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
         <div className="flex grow flex-col items-center justify-between gap-y-5 overflow-y-auto bg-light-secondary dark:bg-dark-secondary px-2 py-8 shadow-sm shadow-light-200/10 dark:shadow-black/25">
           <a
             className="p-2.5 rounded-full bg-light-200 text-black/70 dark:bg-dark-200 dark:text-white/70 hover:opacity-70 hover:scale-105 tansition duration-200"
-            href="/"
+            href="/chat"
           >
             <Plus size={19} className="cursor-pointer" />
           </a>
