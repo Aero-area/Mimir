@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -16,6 +16,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
+  Play,
+  HelpCircle,
+  Hash,
+  Database,
+  Terminal,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -39,6 +44,7 @@ interface ResearchRun {
   chatModelProvider: string | null;
   chatModelKey: string | null;
   error: string | null;
+  metadata?: string | null;
 }
 
 interface SearchQuery {
@@ -96,6 +102,12 @@ export default function ProjectDetailsPage() {
   const [collecting, setCollecting] = useState(false);
   const [collectionErrors, setCollectionErrors] = useState<string[]>([]);
   const [collectionSummary, setCollectionSummary] = useState<any>(null);
+
+  // Research Loop State
+  const [researching, setResearching] = useState(false);
+  const [loopProgress, setLoopProgress] = useState<string[]>([]);
+  const [activePhase, setActivePhase] = useState<string>('');
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   const fetchProjectData = async () => {
     try {
@@ -157,8 +169,17 @@ export default function ProjectDetailsPage() {
       setRunSources([]);
       setCollectionSummary(null);
       setCollectionErrors([]);
+      setLoopProgress([]);
+      setResearching(false);
+      setActivePhase('');
     }
   }, [selectedRunId]);
+
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [loopProgress]);
 
   const handleCreateRun = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,7 +243,6 @@ export default function ProjectDetailsPage() {
         if (data.errors && data.errors.length > 0) {
           setCollectionErrors(data.errors);
         }
-        // Refresh sources & queries list
         await fetchRunDetails(selectedRunId!);
       } else {
         const errData = await res.json();
@@ -235,6 +255,68 @@ export default function ProjectDetailsPage() {
       setCollecting(false);
     }
   };
+
+  const handleStartResearch = async () => {
+    if (!selectedRunId) return;
+
+    setResearching(true);
+    setLoopProgress([]);
+    setActivePhase('initializing');
+    setLoopProgress(['[System] Initializing research process...']);
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/runs/${selectedRunId}/research`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || 'Failed to start research loop');
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error('Readable stream not supported');
+
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const progress = JSON.parse(line);
+            setActivePhase(progress.phase);
+            setLoopProgress((prev) => [...prev, `[${progress.phase.toUpperCase()}] ${progress.message}`]);
+            
+            if (progress.phase === 'completed') {
+              toast.success('Research loop completed successfully');
+              setResearching(false);
+              await fetchRunDetails(selectedRunId);
+            } else if (progress.phase === 'failed') {
+              toast.error(progress.message);
+              setResearching(false);
+              await fetchRunDetails(selectedRunId);
+            }
+          } catch (e) {
+            console.error('Error parsing progress stream line:', e);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message || 'An error occurred during research');
+      setResearching(false);
+    }
+  };
+
+  // Parse Metadata helper
+  const runMeta = selectedRun?.metadata ? JSON.parse(selectedRun.metadata) : null;
 
   if (loading) {
     return (
@@ -379,7 +461,7 @@ export default function ProjectDetailsPage() {
       ) : (
         // === RESEARCH RUN DETAILS / SOURCE COLLECTION VIEW ===
         <div>
-          <div className="mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <button
               onClick={() => setSelectedRunId(null)}
               className="flex flex-row items-center gap-1.5 text-sm text-black/60 dark:text-white/60 hover:text-black hover:dark:text-white transition duration-150"
@@ -387,6 +469,17 @@ export default function ProjectDetailsPage() {
               <ArrowLeft size={16} />
               Back to Project Runs
             </button>
+            
+            {/* Start Research Loop Button */}
+            {selectedRun?.status === 'draft' && !researching && (
+              <button
+                onClick={handleStartResearch}
+                className="flex flex-row items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium shadow-sm transition active:scale-95"
+              >
+                <Play size={14} fill="currentColor" />
+                Start Research Loop
+              </button>
+            )}
           </div>
 
           {loadingRunDetails || !selectedRun ? (
@@ -397,25 +490,149 @@ export default function ProjectDetailsPage() {
             <div>
               {/* Run Information Header */}
               <div className="bg-light-secondary dark:bg-dark-secondary border border-light-200 dark:border-dark-200 rounded-xl p-6 mb-8">
-                <h1 className="text-lg font-semibold text-black dark:text-white">
-                  Research Run: {selectedRun.id.slice(0, 8)}
-                </h1>
-                <p className="text-sm text-black/70 dark:text-white/70 mt-2">
-                  <strong>Topic / Goal:</strong> {selectedRun.input}
-                </p>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h1 className="text-lg font-semibold text-black dark:text-white">
+                      Research Run: {selectedRun.id.slice(0, 8)}
+                    </h1>
+                    <p className="text-sm text-black/70 dark:text-white/70 mt-2">
+                      <strong>Topic / Goal:</strong> {selectedRun.input}
+                    </p>
+                  </div>
+                  <span className={`capitalize text-xs font-semibold px-2.5 py-1 rounded ${
+                    selectedRun.status === 'completed'
+                      ? 'bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-400'
+                      : selectedRun.status === 'failed'
+                        ? 'bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-400'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-400'
+                  }`}>
+                    {selectedRun.status}
+                  </span>
+                </div>
+                {runMeta?.stopReason && (
+                  <div className="mt-4 p-3 bg-light-200/40 dark:bg-dark-200/40 rounded-lg text-xs border border-light-200/50 dark:border-dark-200/30 text-black/80 dark:text-white/80">
+                    <strong>Stop Reason:</strong> {runMeta.stopReason}
+                  </div>
+                )}
                 <div className="mt-4 pt-3 border-t border-light-200/50 dark:border-dark-200/50 flex flex-row gap-4 text-xs text-black/40 dark:text-white/40">
                   <span>Started: {new Date(selectedRun.startedAt).toLocaleString()}</span>
-                  <span>•</span>
-                  <span>Status: <span className="capitalize font-medium text-black/60 dark:text-white/60">{selectedRun.status}</span></span>
+                  {selectedRun.completedAt && (
+                    <span>Completed: {new Date(selectedRun.completedAt).toLocaleString()}</span>
+                  )}
                 </div>
               </div>
 
-              {/* Source Collection form panel */}
-              {selectedRun.status === 'draft' && (
+              {/* Streaming Logs Console */}
+              {researching && (
+                <div className="border border-light-200 dark:border-dark-200 rounded-xl bg-black text-emerald-400 font-mono text-xs p-5 mb-8 h-48 overflow-y-auto shadow-inner flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1.5 border-b border-neutral-800 pb-2 mb-2 text-neutral-400">
+                    <Terminal size={14} />
+                    <span>Research Loop Progress Console (Active Phase: {activePhase.toUpperCase()})</span>
+                  </div>
+                  {loopProgress.map((log, index) => (
+                    <div key={index} className="whitespace-pre-wrap leading-relaxed">
+                      {log}
+                    </div>
+                  ))}
+                  <div ref={logEndRef} />
+                </div>
+              )}
+
+              {/* Automated Research Plan Details */}
+              {runMeta && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  {/* Analysis Panel */}
+                  <div className="border border-light-200 dark:border-dark-200 rounded-xl p-5 bg-light-secondary/30 dark:bg-dark-secondary/30">
+                    <h3 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2 border-b border-light-200 dark:border-dark-200 pb-2">
+                      <HelpCircle size={16} />
+                      Project Analysis
+                    </h3>
+                    <div className="space-y-3.5 text-xs text-black/70 dark:text-white/70">
+                      <div>
+                        <strong className="block text-black dark:text-white mb-0.5">Purpose</strong>
+                        <p>{runMeta.projectAnalysis?.purpose}</p>
+                      </div>
+                      <div>
+                        <strong className="block text-black dark:text-white mb-0.5">Core Problem</strong>
+                        <p>{runMeta.projectAnalysis?.problem}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <strong className="block text-black dark:text-white mb-0.5">Constraints</strong>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {runMeta.projectAnalysis?.constraints?.map((item: string, idx: number) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <strong className="block text-black dark:text-white mb-0.5">Unknowns / Gaps</strong>
+                          <ul className="list-disc pl-4 space-y-0.5">
+                            {runMeta.projectAnalysis?.unknowns?.map((item: string, idx: number) => (
+                              <li key={idx}>{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Plan & Terminology Panel */}
+                  <div className="border border-light-200 dark:border-dark-200 rounded-xl p-5 bg-light-secondary/30 dark:bg-dark-secondary/30">
+                    <h3 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2 border-b border-light-200 dark:border-dark-200 pb-2">
+                      <Hash size={16} />
+                      Research Tracks & Terminology
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <strong className="block text-xs text-black dark:text-white mb-1.5">Identified Tracks</strong>
+                        <div className="space-y-2">
+                          {runMeta.researchPlan?.tracks?.map((track: any) => (
+                            <div key={track.id} className="p-2.5 rounded border border-light-200/80 dark:border-dark-200/50 bg-light-secondary/50 dark:bg-dark-secondary/20 flex justify-between items-center text-xs">
+                              <div>
+                                <span className="font-semibold text-black dark:text-white block">{track.name}</span>
+                                <span className="text-[10px] text-black/50 dark:text-white/50">{track.description}</span>
+                              </div>
+                              <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-semibold ${
+                                track.status === 'completed'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-950/20 dark:text-green-400'
+                                  : 'bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400'
+                              }`}>
+                                {track.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {runMeta.terminologyMap && (
+                        <div>
+                          <strong className="block text-xs text-black dark:text-white mb-1">Terminology Map</strong>
+                          <div className="flex flex-wrap gap-1">
+                            {runMeta.terminologyMap.academicTerms?.slice(0, 3).map((term: string) => (
+                              <span key={term} className="text-[10px] bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-400 px-2 py-0.5 rounded border border-purple-200/30">
+                                {term}
+                              </span>
+                            ))}
+                            {runMeta.terminologyMap.technicalTerms?.slice(0, 3).map((term: string) => (
+                              <span key={term} className="text-[10px] bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400 px-2 py-0.5 rounded border border-blue-200/30">
+                                {term}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Source Collection form panel (Only show when not executing loop) */}
+              {selectedRun.status === 'draft' && !researching && (
                 <div className="border border-light-200 dark:border-dark-200 rounded-xl p-6 bg-light-secondary/30 dark:bg-dark-secondary/30 mb-8">
                   <h2 className="text-base font-semibold text-black dark:text-white mb-4 flex flex-row items-center gap-2">
                     <Search size={18} />
-                    Source Collection
+                    Source Collection (Manual)
                   </h2>
                   <form onSubmit={handleCollectSources} className="space-y-4">
                     <div>
@@ -520,8 +737,46 @@ export default function ProjectDetailsPage() {
                 </div>
               )}
 
-              {/* Queries Log List */}
-              {runQueries.length > 0 && (
+              {/* Research Loop Rounds History */}
+              {runMeta?.rounds && runMeta.rounds.length > 0 && (
+                <div className="mb-8 border border-light-200 dark:border-dark-200 rounded-xl p-5 bg-light-secondary/10 dark:bg-dark-secondary/10">
+                  <h3 className="text-sm font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                    <Database size={16} />
+                    Research Loop Rounds History
+                  </h3>
+                  <div className="space-y-3.5">
+                    {runMeta.rounds.map((round: any) => (
+                      <div key={round.roundNumber} className="text-xs border-l-2 border-light-200 dark:border-dark-200 pl-3.5 space-y-1">
+                        <strong className="block text-black dark:text-white">Round {round.roundNumber}</strong>
+                        <p className="text-black/50 dark:text-white/50">Found {round.sourcesFoundCount} sources.</p>
+                        <div className="mt-1">
+                          <span className="font-semibold text-black/60 dark:text-white/60">Queries executed:</span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {round.queriesExecuted?.map((q: string, idx: number) => (
+                              <span key={idx} className="bg-light-200 dark:bg-dark-200 px-1.5 py-0.5 rounded text-[10px] font-mono text-black/60 dark:text-white/60">
+                                {q}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        {round.gapsIdentified?.length > 0 && (
+                          <div className="mt-1">
+                            <span className="font-semibold text-black/60 dark:text-white/60">Remaining Gaps:</span>
+                            <ul className="list-disc pl-4 text-black/60 dark:text-white/60 space-y-0.5 mt-0.5">
+                              {round.gapsIdentified.map((gap: string, idx: number) => (
+                                <li key={idx}>{gap}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Queries Log List (Manual queries or loop queries) */}
+              {runQueries.length > 0 && !researching && (
                 <div className="mb-8">
                   <h3 className="text-sm font-semibold text-black dark:text-white mb-3">
                     Query History

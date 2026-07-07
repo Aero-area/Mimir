@@ -58,6 +58,7 @@ export const researchRuns = sqliteTable('research_runs', {
   chatModelProvider: text('chatModelProvider'),
   chatModelKey: text('chatModelKey'),
   error: text('error'),
+  metadata: text('metadata'),
 }, (table) => ({
   projectIdx: index('research_runs_project_id_idx').on(table.projectId),
   statusIdx: index('research_runs_status_idx').on(table.status),
