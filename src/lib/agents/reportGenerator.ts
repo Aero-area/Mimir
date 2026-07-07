@@ -194,8 +194,22 @@ Original extracted findings: ${JSON.stringify(extractionResult.extractedFindings
       }
     }
 
+    // Helper to classify source content class
+    const getSourceContentClass = (source: any): 'verified_source_content' | 'search_snippet' | 'metadata_only' => {
+      const meta = source.metadata ? JSON.parse(source.metadata) : {};
+      if (meta.readmePreview || meta.fullContent || source.sourceType === 'repository') {
+        return 'verified_source_content';
+      }
+      if (meta.snippetPreview || meta.snippet) {
+        return 'search_snippet';
+      }
+      return 'metadata_only';
+    };
+
     // Save findings and sources relations
     const savedFindingIdsMap = new Map<string, string>(); // maps statement to DB ID
+    const linkedSourceIds = new Set<string>();
+
     for (const f of extractionResult.extractedFindings) {
       const findingId = crypto.randomUUID();
       await db.insert(findings).values({
@@ -210,14 +224,36 @@ Original extracted findings: ${JSON.stringify(extractionResult.extractedFindings
       savedFindingIdsMap.set(f.statement, findingId);
 
       for (const rel of f.relations) {
-        // Verify excerpt against actual source content (snippet preview)
         let verifiedExcerpt = rel.excerpt || null;
+        let finalRelationType = rel.relationType;
+        let finalLocation = rel.location || null;
+
         const linkedSource = dbSources.find(s => s.id === rel.sourceId);
-        if (verifiedExcerpt && linkedSource) {
-          const meta = linkedSource.metadata ? JSON.parse(linkedSource.metadata) : {};
-          const fullSnippet = meta.snippetPreview || '';
-          if (!fullSnippet.toLowerCase().includes(verifiedExcerpt.toLowerCase())) {
-            verifiedExcerpt = null; // discard if unverified
+        if (linkedSource) {
+          linkedSourceIds.add(rel.sourceId);
+          const contentClass = getSourceContentClass(linkedSource);
+
+          if (contentClass === 'verified_source_content') {
+            // Only verified_source_content can support excerpts
+            if (verifiedExcerpt) {
+              const meta = linkedSource.metadata ? JSON.parse(linkedSource.metadata) : {};
+              const fullText = (meta.readmePreview || meta.fullContent || '').toLowerCase();
+              if (!fullText.includes(verifiedExcerpt.toLowerCase())) {
+                verifiedExcerpt = null; // discard excerpt if not found in actual source content
+              }
+            }
+          } else if (contentClass === 'search_snippet') {
+            // Snippets without full source content can only have context or mentions
+            if (finalRelationType === 'supports' || finalRelationType === 'contradicts') {
+              finalRelationType = 'context';
+            }
+            // Discard excerpt (snippets cannot have verified excerpts)
+            verifiedExcerpt = null;
+          } else {
+            // metadata_only
+            finalRelationType = 'mentions';
+            verifiedExcerpt = null;
+            finalLocation = null;
           }
         }
 
@@ -225,9 +261,9 @@ Original extracted findings: ${JSON.stringify(extractionResult.extractedFindings
           id: crypto.randomUUID(),
           findingId,
           sourceId: rel.sourceId,
-          relationType: rel.relationType,
+          relationType: finalRelationType,
           excerpt: verifiedExcerpt,
-          location: rel.location || null,
+          location: finalLocation,
           createdAt: now
         }).execute();
       }
@@ -296,6 +332,23 @@ Consequences:\n${JSON.stringify(consequenceResult.consequences, null, 2)}`;
       schema: reportSynthesisSchema
     })) as z.infer<typeof reportSynthesisSchema>;
 
+    // Compute metrics
+    const totalCollected = dbSources.length;
+    const totalAssessed = assessmentResult.assessments.length;
+    const totalLinkedToFindings = linkedSourceIds.size;
+
+    const usedSourceIds = new Set<string>();
+    for (const src of dbSources) {
+      if (reportResult.content.includes(src.id)) {
+        usedSourceIds.add(src.id);
+      }
+    }
+    const totalUsedInReport = usedSourceIds.size;
+    const totalDiscarded = totalCollected - totalLinkedToFindings;
+    const discardedReason = totalDiscarded > 0 
+      ? 'Kilder blev fravalgt, da de enten havde lavere relevans eller ikke indeholdt direkte evidens for de udtrukne arkitektoniske fund under Stage 2.'
+      : 'Ingen kilder blev fravalgt.';
+
     // Update report to completed state
     await db.update(reports).set({
       content: reportResult.content,
@@ -303,7 +356,15 @@ Consequences:\n${JSON.stringify(consequenceResult.consequences, null, 2)}`;
       summary: reportResult.summary,
       updatedAt: new Date().toISOString(),
       metadata: JSON.stringify({
-        generatedRoundsCount: existingReports.length + 1
+        generatedRoundsCount: existingReports.length + 1,
+        metrics: {
+          totalCollected,
+          totalAssessed,
+          totalLinkedToFindings,
+          totalUsedInReport,
+          totalDiscarded,
+          discardedReason
+        }
       })
     }).where(eq(reports.id, reportId)).execute();
 
