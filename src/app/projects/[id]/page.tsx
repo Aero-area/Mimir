@@ -21,6 +21,10 @@ import {
   Hash,
   Database,
   Terminal,
+  BookOpen,
+  List,
+  Shield,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -71,6 +75,113 @@ interface DBFileSource {
   metadata: string; // JSON string
 }
 
+interface ReportVersion {
+  id: string;
+  runId: string;
+  content: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  generatedAt: string;
+  modelProvider: string | null;
+  modelKey: string | null;
+  isActive: number;
+  summary: string | null;
+}
+
+interface SourceAssessment {
+  id: string;
+  runId: string;
+  sourceId: string;
+  directRelevance: string;
+  originalSource: string;
+  publicationStatus: string;
+  methodTransparency: string;
+  implementationEvidence: string;
+  recency: string;
+  knownLimitations: string;
+  qualityReasoning: string;
+  createdAt: string;
+}
+
+interface FindingConsequence {
+  id: string;
+  findingId: string;
+  impactDescription: string;
+  affectedChoice: string;
+  riskChange: string;
+  reopenAssumptions: string;
+  validationRequired: string;
+  createdAt: string;
+}
+
+interface FindingSourceRelation {
+  id: string;
+  findingId: string;
+  sourceId: string;
+  relationType: string;
+  excerpt: string | null;
+  location: string | null;
+}
+
+interface Finding {
+  id: string;
+  runId: string;
+  statement: string;
+  category: string;
+  status: string;
+  reasoning: string;
+  createdAt: string;
+  relations: FindingSourceRelation[];
+  consequences: FindingConsequence[];
+}
+
+// Simple Markdown parser function to render headers, lists, links, and bold text securely
+function renderSimpleMarkdown(md: string) {
+  if (!md) return '';
+  const lines = md.split('\n');
+  return lines.map((line, index) => {
+    let cleanLine = line;
+    // Headers
+    if (cleanLine.startsWith('# ')) {
+      return <h1 key={index} className="text-xl font-bold text-black dark:text-white mt-5 mb-2">{cleanLine.slice(2)}</h1>;
+    }
+    if (cleanLine.startsWith('## ')) {
+      return <h2 key={index} className="text-lg font-bold text-black dark:text-white mt-4 mb-2">{cleanLine.slice(3)}</h2>;
+    }
+    if (cleanLine.startsWith('### ')) {
+      return <h3 key={index} className="text-base font-bold text-black dark:text-white mt-3 mb-1.5">{cleanLine.slice(4)}</h3>;
+    }
+    // Bullet points
+    if (cleanLine.startsWith('- ') || cleanLine.startsWith('* ')) {
+      return <li key={index} className="ml-4 list-disc text-sm text-black/80 dark:text-white/80 my-1">{cleanLine.slice(2)}</li>;
+    }
+    // Numbered list
+    const numMatch = cleanLine.match(/^(\d+)\.\s(.*)/);
+    if (numMatch) {
+      return <li key={index} className="ml-4 list-decimal text-sm text-black/80 dark:text-white/80 my-1">{numMatch[2]}</li>;
+    }
+    // Bold, italic, links placeholders parsing
+    const parsedText = cleanLine
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" class="text-blue-600 dark:text-blue-400 underline inline-flex items-center gap-0.5">$1</a>');
+
+    if (!cleanLine.trim()) {
+      return <div key={index} className="h-2" />;
+    }
+
+    return (
+      <p
+        key={index}
+        className="text-sm text-black/80 dark:text-white/80 leading-relaxed my-1.5"
+        dangerouslySetInnerHTML={{ __html: parsedText }}
+      />
+    );
+  });
+}
+
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -109,6 +220,14 @@ export default function ProjectDetailsPage() {
   const [activePhase, setActivePhase] = useState<string>('');
   const logEndRef = useRef<HTMLDivElement>(null);
 
+  // Report & Evidence State
+  const [activeReport, setActiveReport] = useState<ReportVersion | null>(null);
+  const [runFindings, setRunFindings] = useState<Finding[]>([]);
+  const [runAssessments, setRunAssessments] = useState<SourceAssessment[]>([]);
+  const [reportVersions, setReportVersions] = useState<ReportVersion[]>([]);
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [activeReportTab, setActiveReportTab] = useState<'report' | 'findings' | 'assessments' | 'consequences'>('report');
+
   const fetchProjectData = async () => {
     try {
       const projectRes = await fetch(`/api/projects/${projectId}`);
@@ -136,6 +255,7 @@ export default function ProjectDetailsPage() {
   const fetchRunDetails = async (runId: string) => {
     setLoadingRunDetails(true);
     try {
+      // 1. Core Run Details
       const res = await fetch(`/api/projects/${projectId}/runs/${runId}`);
       if (res.ok) {
         const data = await res.json();
@@ -146,6 +266,23 @@ export default function ProjectDetailsPage() {
       } else {
         toast.error('Failed to load research run details');
       }
+
+      // 2. Active Report & Evidence
+      const reportRes = await fetch(`/api/projects/${projectId}/runs/${runId}/report`);
+      if (reportRes.ok) {
+        const rData = await reportRes.json();
+        setActiveReport(rData.activeReport);
+        setRunFindings(rData.findings || []);
+        setRunAssessments(rData.assessments || []);
+      }
+
+      // 3. Report Versions
+      const versionsRes = await fetch(`/api/projects/${projectId}/runs/${runId}/report/versions`);
+      if (versionsRes.ok) {
+        const vData = await versionsRes.json();
+        setReportVersions(vData.versions || []);
+      }
+
     } catch (err) {
       console.error(err);
       toast.error('Error loading run details');
@@ -172,6 +309,10 @@ export default function ProjectDetailsPage() {
       setLoopProgress([]);
       setResearching(false);
       setActivePhase('');
+      setActiveReport(null);
+      setRunFindings([]);
+      setRunAssessments([]);
+      setReportVersions([]);
     }
   }, [selectedRunId]);
 
@@ -199,7 +340,7 @@ export default function ProjectDetailsPage() {
         setInput('');
         setIsCreatingRun(false);
         await fetchProjectData();
-        setSelectedRunId(data.run.id); // Open it directly
+        setSelectedRunId(data.run.id);
       } else {
         const errData = await res.json();
         toast.error(errData.message || 'Failed to create research run');
@@ -315,7 +456,52 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  // Parse Metadata helper
+  const handleGenerateReport = async () => {
+    if (!selectedRunId) return;
+    setGeneratingReport(true);
+    toast.info('Starting report & evidence generation pipeline...');
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/runs/${selectedRunId}/report`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        toast.success('Research report & evidence successfully generated');
+        await fetchRunDetails(selectedRunId);
+      } else {
+        const errData = await res.json();
+        toast.error(errData.message || 'Failed to generate report');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('An error occurred during report generation');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
+  const handleActivateVersion = async (versionId: string) => {
+    if (!selectedRunId) return;
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/runs/${selectedRunId}/report/versions/${versionId}/active`,
+        { method: 'POST' }
+      );
+
+      if (res.ok) {
+        toast.success('Report version activated successfully');
+        await fetchRunDetails(selectedRunId);
+      } else {
+        const errData = await res.json();
+        toast.error(errData.message || 'Failed to activate version');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('An error occurred activating version');
+    }
+  };
+
   const runMeta = selectedRun?.metadata ? JSON.parse(selectedRun.metadata) : null;
 
   if (loading) {
@@ -470,16 +656,34 @@ export default function ProjectDetailsPage() {
               Back to Project Runs
             </button>
             
-            {/* Start Research Loop Button */}
-            {selectedRun?.status === 'draft' && !researching && (
-              <button
-                onClick={handleStartResearch}
-                className="flex flex-row items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium shadow-sm transition active:scale-95"
-              >
-                <Play size={14} fill="currentColor" />
-                Start Research Loop
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Generate Report Button (only when loop completed) */}
+              {selectedRun?.status === 'completed' && !generatingReport && (
+                <button
+                  onClick={handleGenerateReport}
+                  className="flex flex-row items-center gap-1.5 px-4 py-2 bg-black text-white dark:bg-white dark:text-black rounded-lg text-sm font-medium shadow-sm transition active:scale-95 hover:opacity-85"
+                >
+                  <BookOpen size={14} />
+                  Generate Evidence & Report
+                </button>
+              )}
+              {generatingReport && (
+                <div className="flex items-center gap-1.5 text-xs text-black/60 dark:text-white/60 font-medium px-3 py-1.5 border border-light-200 dark:border-dark-200 bg-light-secondary dark:bg-dark-secondary rounded-lg">
+                  <Loader2 className="animate-spin text-black dark:text-white" size={14} />
+                  Generating Report...
+                </div>
+              )}
+              {/* Start Research Loop Button */}
+              {selectedRun?.status === 'draft' && !researching && (
+                <button
+                  onClick={handleStartResearch}
+                  className="flex flex-row items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium shadow-sm transition active:scale-95"
+                >
+                  <Play size={14} fill="currentColor" />
+                  Start Research Loop
+                </button>
+              )}
+            </div>
           </div>
 
           {loadingRunDetails || !selectedRun ? (
@@ -535,6 +739,209 @@ export default function ProjectDetailsPage() {
                     </div>
                   ))}
                   <div ref={logEndRef} />
+                </div>
+              )}
+
+              {/* === REPORT & EVIDENCE VIEWER === */}
+              {activeReport && (
+                <div className="border border-light-200 dark:border-dark-200 rounded-xl p-6 bg-light-secondary/20 dark:bg-dark-secondary/10 mb-8">
+                  <div className="flex flex-row items-center justify-between border-b border-light-200 dark:border-dark-200 pb-4 mb-4 flex-wrap gap-4">
+                    <div className="flex flex-row items-center gap-2">
+                      <BookOpen size={20} className="text-black/70 dark:text-white/70" />
+                      <h2 className="text-lg font-bold text-black dark:text-white">
+                        Research Report & Evidence
+                      </h2>
+                      <span className="text-xs bg-black text-white dark:bg-white dark:text-black px-2 py-0.5 rounded font-medium">
+                        Version {activeReport.version} (Active)
+                      </span>
+                    </div>
+
+                    {/* Report Tabs Selector */}
+                    <div className="flex flex-row gap-1 bg-light-200 dark:bg-dark-200 p-1 rounded-lg text-xs font-semibold text-black/60 dark:text-white/60">
+                      <button
+                        onClick={() => setActiveReportTab('report')}
+                        className={`px-3 py-1.5 rounded-md transition ${activeReportTab === 'report' ? 'bg-black text-white dark:bg-white dark:text-black shadow' : ''}`}
+                      >
+                        Report Content
+                      </button>
+                      <button
+                        onClick={() => setActiveReportTab('findings')}
+                        className={`px-3 py-1.5 rounded-md transition ${activeReportTab === 'findings' ? 'bg-black text-white dark:bg-white dark:text-black shadow' : ''}`}
+                      >
+                        Extracted Findings
+                      </button>
+                      <button
+                        onClick={() => setActiveReportTab('assessments')}
+                        className={`px-3 py-1.5 rounded-md transition ${activeReportTab === 'assessments' ? 'bg-black text-white dark:bg-white dark:text-black shadow' : ''}`}
+                      >
+                        Source Quality Profiles
+                      </button>
+                      <button
+                        onClick={() => setActiveReportTab('consequences')}
+                        className={`px-3 py-1.5 rounded-md transition ${activeReportTab === 'consequences' ? 'bg-black text-white dark:bg-white dark:text-black shadow' : ''}`}
+                      >
+                        Project Consequences
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Active Tab rendering */}
+                  {activeReportTab === 'report' && (
+                    <div className="bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 rounded-lg p-6 shadow-sm overflow-x-auto prose dark:prose-invert max-w-none">
+                      {renderSimpleMarkdown(activeReport.content)}
+                    </div>
+                  )}
+
+                  {activeReportTab === 'findings' && (
+                    <div className="space-y-4">
+                      {runFindings.length === 0 ? (
+                        <p className="text-sm text-black/50 dark:text-white/50 text-center py-6">No findings extracted yet.</p>
+                      ) : (
+                        runFindings.map((f) => (
+                          <div key={f.id} className="p-4 bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 rounded-lg">
+                            <div className="flex flex-row items-center justify-between gap-4 mb-2">
+                              <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-light-200 dark:bg-dark-200 text-black/70 dark:text-white/70">
+                                {f.category.replace('_', ' ')}
+                              </span>
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                f.status === 'supported'
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-950/20 dark:text-green-400'
+                                  : f.status === 'contradicted'
+                                    ? 'bg-red-100 text-red-800 dark:bg-red-950/20 dark:text-red-400'
+                                    : 'bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:text-amber-400'
+                              }`}>
+                                {f.status}
+                              </span>
+                            </div>
+                            <h4 className="font-semibold text-sm text-black dark:text-white">{f.statement}</h4>
+                            <p className="text-xs text-black/60 dark:text-white/60 mt-1 italic">{f.reasoning}</p>
+
+                            {/* Finding Relations */}
+                            {f.relations && f.relations.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-light-200/50 dark:border-dark-200/20">
+                                <span className="block text-[10px] font-bold text-black/40 dark:text-white/40 mb-1.5">References & Citations:</span>
+                                <div className="space-y-1.5">
+                                  {f.relations.map((rel) => {
+                                    const src = runSources.find(s => s.id === rel.sourceId);
+                                    return (
+                                      <div key={rel.id} className="text-xs bg-light-200/40 dark:bg-dark-200/30 p-2 rounded">
+                                        <div className="flex justify-between items-center text-[10px]">
+                                          <span className="font-semibold text-black/70 dark:text-white/70">{src?.title || 'Unknown Source'}</span>
+                                          <span className="capitalize text-black/40 dark:text-white/40">{rel.relationType}</span>
+                                        </div>
+                                        {rel.excerpt && (
+                                          <blockquote className="border-l border-light-200 dark:border-dark-200 pl-2 mt-1 text-black/50 dark:text-white/50 italic">
+                                            "{rel.excerpt}"
+                                          </blockquote>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {activeReportTab === 'assessments' && (
+                    <div className="space-y-4">
+                      {runAssessments.length === 0 ? (
+                        <p className="text-sm text-black/50 dark:text-white/50 text-center py-6">No source assessments created.</p>
+                      ) : (
+                        runAssessments.map((a) => {
+                          const src = runSources.find(s => s.id === a.sourceId);
+                          return (
+                            <div key={a.id} className="p-4 bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 rounded-lg">
+                              <h4 className="font-semibold text-sm text-black dark:text-white mb-2">{src?.title || 'Unknown Source'}</h4>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-[11px] text-black/60 dark:text-white/60 mb-2 bg-light-200/40 dark:bg-dark-200/20 p-2.5 rounded">
+                                <div><strong>Relevance:</strong> {a.directRelevance}</div>
+                                <div><strong>Source Type:</strong> {a.originalSource}</div>
+                                <div><strong>Publication Status:</strong> {a.publicationStatus}</div>
+                                <div><strong>Method Transparency:</strong> {a.methodTransparency}</div>
+                                <div><strong>Implementation Evidence:</strong> {a.implementationEvidence}</div>
+                                <div><strong>Recency:</strong> {a.recency}</div>
+                                <div className="col-span-2 md:col-span-3"><strong>Limitations:</strong> {a.knownLimitations}</div>
+                              </div>
+                              <p className="text-xs text-black/50 dark:text-white/50 italic mt-1.5">
+                                <strong>Assessment Reasoning:</strong> {a.qualityReasoning}
+                              </p>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+
+                  {activeReportTab === 'consequences' && (
+                    <div className="space-y-4">
+                      {runFindings.flatMap(f => f.consequences || []).length === 0 ? (
+                        <p className="text-sm text-black/50 dark:text-white/50 text-center py-6">No consequences mapped.</p>
+                      ) : (
+                        runFindings.flatMap(f => (f.consequences || []).map(c => {
+                          return (
+                            <div key={c.id} className="p-4 bg-light-primary dark:bg-dark-primary border border-light-200 dark:border-dark-200 rounded-lg space-y-2">
+                              <div>
+                                <span className="text-[10px] font-bold text-black/40 dark:text-white/40 block">Based on Finding:</span>
+                                <p className="text-xs font-medium text-black dark:text-white">{f.statement}</p>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-black/80 dark:text-white/80 mt-1 border-t border-light-200/50 dark:border-dark-200/10 pt-2">
+                                <div>
+                                  <strong>Impact Description:</strong>
+                                  <p className="text-black/60 dark:text-white/60">{c.impactDescription}</p>
+                                </div>
+                                <div>
+                                  <strong>Affected Architecture Choice:</strong>
+                                  <p className="text-black/60 dark:text-white/60">{c.affectedChoice}</p>
+                                </div>
+                                <div>
+                                  <strong>Risk Profile Change:</strong>
+                                  <p className="text-black/60 dark:text-white/60">{c.riskChange}</p>
+                                </div>
+                                <div>
+                                  <strong>Assumptions to Reopen:</strong>
+                                  <p className="text-black/60 dark:text-white/60">{c.reopenAssumptions}</p>
+                                </div>
+                                <div className="col-span-1 md:col-span-2">
+                                  <strong>Validation Required:</strong>
+                                  <p className="text-black/60 dark:text-white/60">{c.validationRequired}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }))
+                      )}
+                    </div>
+                  )}
+
+                  {/* Report Versions Log Timeline */}
+                  {reportVersions.length > 1 && (
+                    <div className="mt-6 pt-5 border-t border-light-200 dark:border-dark-200">
+                      <span className="text-xs font-bold text-black/50 dark:text-white/50 block mb-2.5 flex items-center gap-1.5">
+                        <Clock size={14} /> Report Generation History
+                      </span>
+                      <div className="flex flex-row flex-wrap gap-2">
+                        {reportVersions.map((v) => (
+                          <button
+                            key={v.id}
+                            disabled={v.isActive === 1 || v.status !== 'completed'}
+                            onClick={() => handleActivateVersion(v.id)}
+                            className={`text-[11px] px-2.5 py-1 rounded border transition ${
+                              v.isActive === 1
+                                ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white cursor-default'
+                                : v.status === 'completed'
+                                  ? 'bg-light-200 dark:bg-dark-200 border-light-200 dark:border-dark-200 hover:border-black/20 hover:dark:border-white/20'
+                                  : 'bg-red-50 text-red-500 border-red-200 cursor-not-allowed opacity-60'
+                            }`}
+                          >
+                            Version {v.version} ({v.status}) {v.isActive === 1 && '• Active'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
