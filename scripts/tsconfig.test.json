@@ -15,7 +15,8 @@
     "../next-env.d.ts",
     "../src/**/*.ts",
     "../src/**/*.tsx",
-    "./test-release-scenario.ts"
+    "./test-release-scenario.ts",
+    "./test-process-restart.ts"
   ],
   "exclude": ["../node_modules"]
 }

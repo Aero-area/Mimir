@@ -218,9 +218,8 @@ const MessageBox = ({
                 )}
 
                 {isLast &&
+                  (section.suggestions?.length ?? 0) > 0 &&
                   false &&
-                  section.suggestions &&
-                  section.suggestions.length > 0 &&
                   hasContent &&
                   !loading && (
                     <div className="mt-6">
@@ -234,7 +233,7 @@ const MessageBox = ({
                         </h3>
                       </div>
                       <div className="space-y-0">
-                        {section.suggestions.map(
+                        {section.suggestions?.map(
                           (suggestion: string, i: number) => (
                             <div key={i}>
                               <div className="h-px bg-light-200/40 dark:bg-dark-200/40" />
