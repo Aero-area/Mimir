@@ -11,8 +11,8 @@ class ModelRegistry {
   })[] = [];
 
   constructor() {
-    this.initializeActiveProviders();
     this.reconcileConfigPresets();
+    this.initializeActiveProviders();
   }
 
   private reconcileConfigPresets() {
