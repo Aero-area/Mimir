@@ -86,7 +86,9 @@ Mimir supports chat completions via NVIDIA NIM cloud endpoints using an OpenAI-c
 ### Privacy Notice & Limitations
 - **External Cloud Processing:** NVIDIA NIM is an external cloud endpoint. Trial usage may log input and output data. Do not use this provider for confidential, personal, or sensitive projects.
 - **Sensitive Projects:** For sensitive or offline projects, we strongly recommend using a **local Ollama** setup.
-- **Verified Model:** The supported and verified model ID is `nvidia/nemotron-3-ultra-550b-a55b`.
+- **Verified Models:**
+  - `nvidia/nemotron-3-nano-30b-a3b` — Fast analysis, classification, query refinement, and smaller JSON outputs.
+  - `nvidia/nemotron-3-ultra-550b-a55b` — Heavy research, long contexts, and report compilation.
 - **Known Limitations:** Embedding models and vision/video specializations are not supported under the NVIDIA NIM provider in this version.
 
 ---

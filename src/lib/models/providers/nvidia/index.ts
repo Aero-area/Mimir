@@ -15,6 +15,10 @@ const defaultChatModels: Model[] = [
     name: 'NVIDIA Nemotron 3 Ultra 550B',
     key: 'nvidia/nemotron-3-ultra-550b-a55b',
   },
+  {
+    name: 'NVIDIA Nemotron 3 Nano 30B',
+    key: 'nvidia/nemotron-3-nano-30b-a3b',
+  },
 ];
 
 const providerConfigFields: UIConfigField[] = [

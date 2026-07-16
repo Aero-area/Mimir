@@ -10,6 +10,7 @@ import { generateReportAndEvidence } from '../src/lib/agents/reportGenerator';
 import * as searxng from '../src/lib/adapters/searxng';
 import * as openalex from '../src/lib/adapters/openalex';
 import * as github from '../src/lib/adapters/github';
+import { z } from 'zod';
 
 // Stub search adapters to keep test consumption low and avoid external dependencies
 Object.defineProperty(searxng, 'searchWeb', { value: async () => [] });
@@ -35,25 +36,61 @@ async function runNVIDIATest() {
   });
 
   // 1. Direct Chat Completion Test (Health check)
-  console.log('1. Kører direkte chat completion test (health check)...');
-  let llm;
+  console.log('1. Kører direkte chat completion test (health check) for hver model...');
+  const modelsToTest = [
+    'nvidia/nemotron-3-ultra-550b-a55b',
+    'nvidia/nemotron-3-nano-30b-a3b'
+  ];
+
+  for (const m of modelsToTest) {
+    console.log(`Testing model: ${m}`);
+    try {
+      const llm = await provider.loadChatModel(m);
+      const result = await llm.generateText({
+        messages: [{ role: 'user', content: 'MODELTEST OK' }],
+        options: { temperature: 0.1, maxTokens: 15 },
+      });
+      console.log(`Modelrespons for ${m}: "${result.content.trim()}"`);
+      console.log(`NVIDIA NIM chat completion for ${m}: SUCCESS`);
+    } catch (err: any) {
+      console.error(`NVIDIA NIM chat completion failed for ${m}:`, err.message || err);
+      process.exit(1);
+    }
+  }
+
+  // 3. Nemotron Nano Smoke Test
+  console.log('3. Afvikler Nemotron Nano smoke test (JSON klassifikation)...');
   try {
-    llm = await provider.loadChatModel('nvidia/nemotron-3-ultra-550b-a55b');
-    const result = await llm.generateText({
-      messages: [{ role: 'user', content: 'MODELTEST OK' }],
-      options: { temperature: 0.1, maxTokens: 15 },
+    const nemotronNano = await provider.loadChatModel('nvidia/nemotron-3-nano-30b-a3b');
+    const classificationSchema = z.object({
+      category: z.string(),
+      confidence: z.number()
     });
-    console.log(`Modelrespons: "${result.content.trim()}"`);
-    console.log('NVIDIA NIM chat completion test: SUCCESS');
+    const nanoResult = await nemotronNano.generateObject<any>({
+      messages: [
+        {
+          role: 'user',
+          content: 'Classify this sentence: "I love coding agents". Categories: technology, food, sports. Return JSON.'
+        }
+      ],
+      schema: classificationSchema,
+      options: { temperature: 0.1 }
+    });
+    console.log(`Nemotron Nano klassifikation JSON:`, JSON.stringify(nanoResult));
+    console.log('Nemotron Nano smoke test: SUCCESS');
   } catch (err: any) {
-    console.error('NVIDIA NIM chat completion test failed:', err.message || err);
+    console.error('Nemotron Nano smoke test failed:', err.message || err);
     process.exit(1);
   }
 
+  // 4. Full E2E Loop using Ultra
+  console.log('4. Afvikler fuld E2E research og rapport loop med Nemotron Ultra...');
   const projectId = crypto.randomUUID();
   const runId = crypto.randomUUID();
 
   try {
+    const ultraLLM = await provider.loadChatModel('nvidia/nemotron-3-ultra-550b-a55b');
+
     // Insert temp project & research run
     await db.insert(projects).values({
       id: projectId,
@@ -72,15 +109,13 @@ async function runNVIDIATest() {
       startedAt: new Date().toISOString()
     }).execute();
 
-    // 2. Run Research Smoke Test
-    console.log('2. Afvikler research smoke test...');
-    await runResearchLoop(projectId, runId, llm, (progress) => {
+    // Run Research Smoke Test
+    await runResearchLoop(projectId, runId, ultraLLM, (progress) => {
       console.log(`[Research Progress] ${progress.phase}: ${progress.message}`);
     });
     console.log('Research smoke test: SUCCESS');
 
-    // 3. Opret en kunstig kilde til rapportgenerering
-    console.log('3. Tilføjer testkilde til rapportgenerering...');
+    // Add temp source
     const sourceId = crypto.randomUUID();
     await db.insert(sources).values({
       id: sourceId,
@@ -96,9 +131,8 @@ async function runNVIDIATest() {
       })
     }).execute();
 
-    // 4. Run Report Smoke Test
-    console.log('4. Afvikler rapport smoke test...');
-    const reportId = await generateReportAndEvidence(projectId, runId, llm, 'nvidia', 'nvidia/nemotron-3-ultra-550b-a55b');
+    // Run Report Smoke Test
+    const reportId = await generateReportAndEvidence(projectId, runId, ultraLLM, 'nvidia', 'nvidia/nemotron-3-ultra-550b-a55b');
     console.log(`Rapport genereret med succes. ID: ${reportId}`);
     console.log('Rapport smoke test: SUCCESS');
 
@@ -110,6 +144,19 @@ async function runNVIDIATest() {
     // Cleanup database
     await db.delete(projects).where(eq(projects.id, projectId)).execute();
   }
+}
+
+async function qwenResultText(qwenCoder: any) {
+  const result = await qwenCoder.generateText({
+    messages: [
+      {
+        role: 'user',
+        content: 'Analyze the following typescript class: class Stack { items = []; push(item) { this.items.push(item); } }'
+      }
+    ],
+    options: { temperature: 0.1, maxTokens: 100 },
+  });
+  return result.content.trim();
 }
 
 // Helper eq for drizzle
