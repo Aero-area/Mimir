@@ -16,7 +16,8 @@
     "../src/**/*.ts",
     "../src/**/*.tsx",
     "./test-release-scenario.ts",
-    "./test-process-restart.ts"
+    "./test-process-restart.ts",
+    "./test-nvidia.ts"
   ],
   "exclude": ["../node_modules"]
 }

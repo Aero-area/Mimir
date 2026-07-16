@@ -66,6 +66,28 @@ Mimir consolidated environment configuration resolves with the following priorit
 - `SEARXNG_API_URL`: URL to the SearXNG search engine instance (e.g. `http://localhost:4000`).
 - `OLLAMA_BASE_URL`: Base URL to local Ollama inference service (defaults to `http://localhost:11434`).
 - `GITHUB_TOKEN`: Optional developer token to prevent rate limiting during collection loops.
+- `NVIDIA_API_KEY`: NVIDIA NIM API key for cloud model inference (required if using NVIDIA NIM provider).
+- `NVIDIA_BASE_URL`: Base URL for the NVIDIA NIM endpoints (defaults to `https://integrate.api.nvidia.com/v1`).
+
+---
+
+## 🤖 NVIDIA NIM Integration
+
+Mimir supports chat completions via NVIDIA NIM cloud endpoints using an OpenAI-compatible endpoint.
+
+### Configuration
+1. Obtain an API key from [build.nvidia.com](https://build.nvidia.com).
+2. Set the key locally by adding `NVIDIA_API_KEY` to your local `.env` file.
+3. Optionally configure `NVIDIA_BASE_URL` if using a custom endpoint.
+
+> [!WARNING]
+> **API Key Security:** Never commit your `.env` file or API keys to versions-controlled repositories.
+
+### Privacy Notice & Limitations
+- **External Cloud Processing:** NVIDIA NIM is an external cloud endpoint. Trial usage may log input and output data. Do not use this provider for confidential, personal, or sensitive projects.
+- **Sensitive Projects:** For sensitive or offline projects, we strongly recommend using a **local Ollama** setup.
+- **Verified Model:** The supported and verified model ID is `nvidia/nemotron-3-ultra-550b-a55b`.
+- **Known Limitations:** Embedding models and vision/video specializations are not supported under the NVIDIA NIM provider in this version.
 
 ---
 
