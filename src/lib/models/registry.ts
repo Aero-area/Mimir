@@ -40,13 +40,26 @@ class ModelRegistry {
           },
         ];
 
-        defaultChatModels.forEach((model) => {
-          const exists = mp.chatModels.some((m) => m.key === model.key);
-          if (!exists) {
-            mp.chatModels.push(model);
-            changed = true;
-          }
-        });
+        // 1. Separate user's custom models from preset models
+        const presetKeys = new Set(defaultChatModels.map((m) => m.key));
+        const customModels = mp.chatModels.filter((m) => !presetKeys.has(m.key));
+
+        // 2. Build stable ordered list: presets first, then custom models
+        const newChatModels = [...defaultChatModels, ...customModels];
+
+        // 3. Deduplicate in case of duplicate entries
+        const uniqueChatModels = newChatModels.filter(
+          (model, index, self) => index === self.findIndex((m) => m.key === model.key)
+        );
+
+        // 4. Check if actual keys or ordering has changed
+        const currentKeys = mp.chatModels.map((m) => m.key).join(',');
+        const newKeys = uniqueChatModels.map((m) => m.key).join(',');
+
+        if (currentKeys !== newKeys) {
+          mp.chatModels = uniqueChatModels;
+          changed = true;
+        }
       }
     });
 

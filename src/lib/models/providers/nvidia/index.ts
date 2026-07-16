@@ -114,9 +114,14 @@ class NVIDIAProvider extends BaseModelProvider<NVIDIAConfig> {
     const configProvider = getConfiguredModelProviderById(this.id);
     const customChatModels = configProvider?.chatModels || [];
 
+    const allChatModels = [...defaultModels.chat, ...customChatModels];
+    const uniqueChatModels = allChatModels.filter(
+      (model, index, self) => index === self.findIndex((m) => m.key === model.key)
+    );
+
     return {
       embedding: [],
-      chat: [...defaultModels.chat, ...customChatModels],
+      chat: uniqueChatModels,
     };
   }
 
