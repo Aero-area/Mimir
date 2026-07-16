@@ -19,6 +19,14 @@ const defaultChatModels: Model[] = [
     name: 'NVIDIA Nemotron 3 Nano 30B',
     key: 'nvidia/nemotron-3-nano-30b-a3b',
   },
+  {
+    name: 'MiniMax-M3',
+    key: 'minimaxai/minimax-m3',
+  },
+  {
+    name: 'NVIDIA Nemotron 3 Nano Omni Reasoning',
+    key: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  },
 ];
 
 const providerConfigFields: UIConfigField[] = [

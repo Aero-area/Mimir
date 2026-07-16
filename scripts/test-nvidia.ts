@@ -39,7 +39,9 @@ async function runNVIDIATest() {
   console.log('1. Kører direkte chat completion test (health check) for hver model...');
   const modelsToTest = [
     'nvidia/nemotron-3-ultra-550b-a55b',
-    'nvidia/nemotron-3-nano-30b-a3b'
+    'nvidia/nemotron-3-nano-30b-a3b',
+    'minimaxai/minimax-m3',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
   ];
 
   for (const m of modelsToTest) {

@@ -89,7 +89,13 @@ Mimir supports chat completions via NVIDIA NIM cloud endpoints using an OpenAI-c
 - **Verified Models:**
   - `nvidia/nemotron-3-nano-30b-a3b` — Fast analysis, classification, query refinement, and smaller JSON outputs.
   - `nvidia/nemotron-3-ultra-550b-a55b` — Heavy research, long contexts, and report compilation.
-- **Known Limitations:** Embedding models and vision/video specializations are not supported under the NVIDIA NIM provider in this version.
+  - `minimaxai/minimax-m3` — Long context, heavy generalist research, repository assessment, and reports.
+  - `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` — Fast reasoning and text-based classification.
+- **Rejected Models:**
+  - `z-ai/glm-5.2` — Fails API test with status 500/timeout.
+  - `moonshotai/kimi-k2.6` — Fails API test with status 404 (Not Found/Unauthorized).
+  - `openai/gpt-oss-120b` — Fails API test (returns `content: null` / reasoning tokens only, causing null property reads).
+- **Known Limitations:** Embedding models and vision/video/audio specializations are not supported under the NVIDIA NIM provider in this version. All multimodal models are registered only as text-based chat models.
 
 ---
 
