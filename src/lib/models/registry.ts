@@ -12,6 +12,47 @@ class ModelRegistry {
 
   constructor() {
     this.initializeActiveProviders();
+    this.reconcileConfigPresets();
+  }
+
+  private reconcileConfigPresets() {
+    const configuredProviders = configManager.getConfig('modelProviders', []) as ConfigModelProvider[];
+    let changed = false;
+
+    configuredProviders.forEach((mp) => {
+      if (mp.type === 'nvidia') {
+        const defaultChatModels = [
+          {
+            name: 'NVIDIA Nemotron 3 Ultra 550B',
+            key: 'nvidia/nemotron-3-ultra-550b-a55b',
+          },
+          {
+            name: 'NVIDIA Nemotron 3 Nano 30B',
+            key: 'nvidia/nemotron-3-nano-30b-a3b',
+          },
+          {
+            name: 'MiniMax-M3',
+            key: 'minimaxai/minimax-m3',
+          },
+          {
+            name: 'NVIDIA Nemotron 3 Nano Omni Reasoning',
+            key: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+          },
+        ];
+
+        defaultChatModels.forEach((model) => {
+          const exists = mp.chatModels.some((m) => m.key === model.key);
+          if (!exists) {
+            mp.chatModels.push(model);
+            changed = true;
+          }
+        });
+      }
+    });
+
+    if (changed) {
+      configManager.updateConfig('modelProviders', configuredProviders);
+    }
   }
 
   private initializeActiveProviders() {
